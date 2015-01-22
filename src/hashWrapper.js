@@ -30,6 +30,9 @@ HashWrapper.prototype = Utils.createNonEnumerable({
 	},
 	remove: function( keys ){
 		var k = keys;
+		if( !k )
+			return this.__notify( 'remove', this );
+
 		if( !Utils.isArray( k ) )
 			k = [k];
 

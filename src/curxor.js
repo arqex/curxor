@@ -20,7 +20,7 @@ var Curxor = function( initalValue ){
 	// Tree will store the current structure,
 	// and it is mutable. It is used to create
 	// the wrapper
-	var tree = new Tree( initalValue );
+	var tree = new Tree( initalValue, elements );
 
 	// Updating flag to trigger the event on nextTick
 	var updating;
@@ -43,8 +43,10 @@ var Curxor = function( initalValue ){
 	};
 
 	var createWrapper = function( subtree, path ){
-		if( subtree.__wrapper )
+		if( subtree.__wrapper ){
+			elements[ subtree.__wrapper.__id ] = path;
 			return subtree.__wrapper;
+		}
 
 		var w;
 		if( Utils.isObject( subtree ) ){
@@ -59,6 +61,7 @@ var Curxor = function( initalValue ){
 
 		// Add the wrapper to the tree
 		subtree.__wrapper = w;
+		elements[ w.__id ] = path;
 
 		// Freeze if possible
 		if( Object.freeze )
@@ -82,7 +85,6 @@ var Curxor = function( initalValue ){
 				w = createWrapper( subtree[ key ], childPath );
 
 			children[ key ] = w;
-			elements[ w.__id ] = childPath;
 		}
 
 		return new HashWrapper( id, children, notify );
@@ -104,7 +106,6 @@ var Curxor = function( initalValue ){
 				w = createWrapper( subtree[ i ], childPath );
 
 			children.push( w );
-			elements[ w._id ] = childPath;
 		}
 
 		return new ArrayWrapper( id, children, notify );

@@ -60,7 +60,7 @@ ArrayWrapper.prototype = Utils.createNonEnumerable({
 		return els;
 	},
 
-	count: function(){
+	size: function(){
 		return this.__children.length;
 	},
 

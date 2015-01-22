@@ -16,6 +16,9 @@ Wrapper.prototype = Utils.createNonEnumerable({
 	set: function( value ){
 		this.__notify( 'replace', this, value );
 	},
+	remove: function(){
+		this.__notify( 'remove', this );
+	},
 	toString: function(){
 		return this.__val.toString();
 	},
