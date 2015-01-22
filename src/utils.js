@@ -13,7 +13,7 @@ var Utils = {
 	},
 
 	isWrapper: function( value ){
-		return value && value instanceof Wrapper;
+		return value && value.__notify;
 	},
 
 	createNonEnumerable: function( obj, proto ){

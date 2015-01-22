@@ -5,7 +5,10 @@ var Utils = require( './utils.js' );
 //#build
 var Wrapper = function( id, value, notify ){
 	this.__addNE( '__id', id );
-	this.__addNE( '__val', value );
+
+	// If it is a leaf, its real value lives in __leafVal
+	// See tree.js
+	this.__addNE( '__val', typeof value.__leafVal != 'undefined' ? value.__leafVal : value );
 	this.__addNE( '__notify', notify);
 };
 

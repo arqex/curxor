@@ -23,7 +23,8 @@ ArrayWrapper.prototype = Utils.createNonEnumerable({
 	},
 
 	append: function( els ){
-		this.__notify( 'append', this, els );
+		if( els && els.length )
+			this.__notify( 'append', this, els );
 	},
 
 	pop: function(){
@@ -31,8 +32,8 @@ ArrayWrapper.prototype = Utils.createNonEnumerable({
 		if( !length )
 			return undefined;
 
-		var el = this._children[ length -1 ];
-		this.__notify( 'pop', this );
+		var el = this.__children[ length - 1 ];
+		el.remove();
 		return el;
 	},
 
@@ -41,7 +42,8 @@ ArrayWrapper.prototype = Utils.createNonEnumerable({
 	},
 
 	prepend: function( els ){
-		this.__notify( 'prepend', this, els );
+		if( els.length )
+			this.__notify( 'prepend', this, els );
 	},
 
 	shift: function(){
@@ -50,7 +52,7 @@ ArrayWrapper.prototype = Utils.createNonEnumerable({
 			return undefined;
 
 		var el = this.__children[0];
-		this.__notify( 'shift', this );
+		el.remove();
 		return el;
 	},
 
@@ -65,7 +67,7 @@ ArrayWrapper.prototype = Utils.createNonEnumerable({
 	},
 
 	forEach: function( clbk ){
-		return this.__children.forEach( ckbk );
+		return this.__children.forEach( clbk );
 	},
 
 	map: function( clbk ){

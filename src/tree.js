@@ -4,7 +4,7 @@ var Utils = require( './utils.js' );
 
 //#build
 var Tree = function( val, els ){
-	this.tree = this.clone( val );
+	this.tree = this.clone( val, [] );
 	this.els = els;
 };
 
@@ -30,7 +30,7 @@ Tree.prototype = Utils.createNonEnumerable({
 		this.removeReferences( target[key] );
 
 		//Update the tree
-		target[ key ] = this.clone( value );
+		target[ key ] = this.prepare( value, path );
 	},
 
 	add: function( type, path, values ){
@@ -38,7 +38,7 @@ Tree.prototype = Utils.createNonEnumerable({
 		for( var key in values ){
 			// Remove any reference
 			this.removeReferences( target[ key ] );
-			target[key] = this.clone( values[key] );
+			target[key] = this.prepare( values[key], path.concat( key ) );
 		}
 	},
 
@@ -72,12 +72,21 @@ Tree.prototype = Utils.createNonEnumerable({
 		var target = this.get( path, true ),
 			i,l
 		;
+
+		// Prepare new elements
 		for( i = 2, l = args.length; i<l; i++ ){
-			args[i] = this.clone( args[i] );
+			args[i] = this.prepare( args[i], path.concat( args[0] + i - 2 ) );
 		}
+
+		// Delete references to the removed elements
 		var removed = target.splice.apply( target, args );
 		for( i = 0, l = removed.length; i<l; i++){
 			this.removeReferences( removed[i] );
+		}
+
+		// Update references for the elements after the inserted ones
+		for( i = args[0] + args.length - 2, l=target.length; i<l; i++ ){
+			this.refreshReferences( target[i], path.concat( i ) );
 		}
 	},
 
@@ -89,9 +98,14 @@ Tree.prototype = Utils.createNonEnumerable({
 	},
 
 	prepend: function( type, path, els ){
-		var target = this.get( path, true );
-		for (var i = 0, l = els.length; i < l; i++) {
-			target.push( this.clone( els[i] ) );
+		var target = this.get( path, true ),
+			i, l
+		;
+		for (i = els.length - 1; i >= 0; i--) {
+			target.unshift( this.clone( els[i] ) );
+		}
+		for (i=els.length, l=target.length; i<l; i++) {
+			this.refreshReferences( target[i], path.concat( i ) );
 		}
 	},
 
@@ -122,20 +136,6 @@ Tree.prototype = Utils.createNonEnumerable({
 		return this.get( path.slice( 0, path.length - 1), doCleaning );
 	},
 
-	each: function( tree, clbk ){
-		clbk( tree );
-		if( Utils.isObject( tree ) ){
-			for( var key in tree ){
-				clbk( tree[ key ] );
-			}
-		}
-		else if ( Utils.isArray( tree ) ){
-			for (var i = 0, l = tree.length; i < l; i++) {
-				clbk( tree[i] );
-			}
-		}
-	},
-
 	copy: function( tree, path, clbk ) {
 		var children;
 		if( Utils.isObject( tree ) ){
@@ -154,9 +154,21 @@ Tree.prototype = Utils.createNonEnumerable({
 		return clbk( tree, path, children );
 	},
 
-	clone: function( tree ){
-		return this.copy( tree, [], function( node, path, children ){
-			return children || new Object( node );
+	leafProto: {constructor: function(){}},
+
+	clone: function( tree, path ){
+		var proto = this.leafProto,
+			p = path || []
+		;
+
+		return this.copy( tree, p, function( node, path, children ){
+			if( children ) {
+
+				return children;
+			}
+
+			// Create an object that returns the plain value of the leaf
+			return Utils.createNonEnumerable({__leafVal:node}, proto);
 		})
 	},
 
@@ -221,11 +233,24 @@ Tree.prototype = Utils.createNonEnumerable({
 	 */
 	removeReferences: function( tree ){
 		var els = this.els;
-		this.each( tree, function( node ){
+		this.copy( tree, [], function( node ){
 			if( !node || !node.__wrapper )
 				return;
 
 			delete els[ node.__wrapper.__id ];
+		});
+	},
+
+	/**
+	 * Refresh the paths of the subtree
+	 * @param  {Branch} tree The tree part to update
+	 * @param  {Array} path The initial path to start refreshing
+	 */
+	refreshReferences: function( tree, path ){
+		var els = this.els;
+		this.copy( tree, path, function( node, path ){
+			if( node.__wrapper )
+				els[ node.__wrapper.__id ] = path;
 		});
 	}
 });

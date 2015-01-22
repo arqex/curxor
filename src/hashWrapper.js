@@ -38,7 +38,7 @@ HashWrapper.prototype = Utils.createNonEnumerable({
 
 		for(var i=0,l=k.length; i<l; i++){
 			if( this.hasOwnProperty( k[i] ) )
-				this.__notify( 'remove', this, key );
+				this.__notify( 'remove', this, k );
 		}
 	}
 }, Wrapper.prototype);
