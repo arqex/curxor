@@ -2,9 +2,7 @@
 
 var Utils = require( './utils.js' ),
 	Emitter = require( './emitter' ),
-	Wrapper = require( './wrapper' ),
-	ArrayWrapper = require('./arrayWrapper'),
-	HashWrapper = require('./hashWrapper'),
+	Mixins = require( './mixins' ),
 	Tree = require( './tree')
 ;
 
@@ -23,16 +21,23 @@ var Curxor = function( initalValue ){
 	var tree = new Tree( initalValue, elements );
 
 	// Updating flag to trigger the event on nextTick
-	var updating;
+	var updating = false;
 	var notify = function notify( eventName, wrapper, options ){
-		var path = elements[ wrapper.__id ];
-		if( eventName == 'path' )
-			return path;
 
-		tree.update( eventName, path, options );
+		if( !tree.nodes[ wrapper.__id ] )
+			return Utils.error( 'Can\'t udpate. The node is not in the curxor.' );
+
+		if( eventName == 'path' )
+			return tree.getPaths( wrapper );
+
+		if( eventName == 'listener' )
+			return tree.createListener( wrapper );
+
+		// Update the tree
+		tree.update( eventName, wrapper, options );
 		me.__wrapper = createWrapper( tree.tree, [] );
 
-		// Update on next tick
+		// Trigger on next tick
 		if( !updating ){
 			updating = true;
 			Utils.nextTick( function(){
@@ -42,73 +47,55 @@ var Curxor = function( initalValue ){
 		}
 	};
 
-	var createWrapper = function( subtree, path ){
-		if( subtree.__wrapper ){
-			elements[ subtree.__wrapper.__id ] = path;
-			return subtree.__wrapper;
-		}
+	var setMixins = function( w, mixin ){
+		Utils.addNE( w, {
+			__id: createId(),
+			__notify: notify,
+			set: function( attrs ){
+				this.__notify( 'replace', this, attrs );
+			},
+			getPaths: function( attrs ){
+				return this.__notify( 'path', this );
+			},
+			getListener: function(){
+				return this.__notify( 'listener', this );
+			}
+		});
+		Utils.addNE( w, mixin );
+	};
 
-		var w;
+	var createWrapper = function( subtree, path ){
+		var w, key, i, l;
+
 		if( Utils.isObject( subtree ) ){
-			w = createHashWrapper( subtree, path );
+			w = {};
+			for( key in subtree )
+				w[ key ] = createWrapper( subtree[key] );
+
+			setMixins( w, Mixins.Hash );
 		}
 		else if( Utils.isArray( subtree ) ){
-			w = createArrayWrapper( subtree, path );
+			w = [];
+			for( i=0, l=subtree.length; i<l; i++ )
+				w[i] = createWrapper( subtree[i] );
+
+			setMixins( w, Mixins.List );
 		}
 		else {
-			w = new Wrapper( createId(), subtree.valueOf(), notify );
+			return subtree;
 		}
 
+		if( subtree.__wrapper )
+			return subtree.__wrapper;
+
 		// Add the wrapper to the tree
-		subtree.__wrapper = w;
-		elements[ w.__id ] = path;
+		tree.addWrapper( subtree, w );
 
 		// Freeze if possible
 		if( Object.freeze )
 			Object.freeze( w );
 
 		return w;
-	};
-
-	var createHashWrapper = function( subtree, path ){
-		var children = {},
-			id = createId(),
-			w, childPath
-		;
-
-		for( var key in subtree ){
-			childPath = path.concat( key );
-
-			if( Utils.isWrapper( subtree[key] ) )
-				w = subtree[ key ];
-			else
-				w = createWrapper( subtree[ key ], childPath );
-
-			children[ key ] = w;
-		}
-
-		return new HashWrapper( id, children, notify );
-	};
-
-
-	var createArrayWrapper = function( subtree, path ){
-		var children = [],
-			id = createId(),
-			w, childPath
-		;
-
-		for (var i = 0, l = subtree.length; i < l; i++) {
-			childPath = path.concat( i );
-
-			if( Utils.isWrapper( subtree[ i ] ) )
-				w = subtree[ i ];
-			else
-				w = createWrapper( subtree[ i ], childPath );
-
-			children.push( w );
-		}
-
-		return new ArrayWrapper( id, children, notify );
 	};
 
 	var createId = function() {
@@ -125,6 +112,10 @@ var Curxor = function( initalValue ){
 Curxor.prototype = Utils.createNonEnumerable({
 	getData: function(){
 		return this.__wrapper;
+	},
+
+	setData: function( wrapper ){
+		this.__wrapper.__notify( 'reset', this.__wrapper, wrapper );
 	}
 }, Emitter);
 //#build

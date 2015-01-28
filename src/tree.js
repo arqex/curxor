@@ -1,118 +1,107 @@
 'use strict';
 
-var Utils = require( './utils.js' );
+var Utils = require( './utils.js' ),
+	Emitter = require( './emitter.js' )
+;
 
 //#build
 var Tree = function( val, els ){
-	this.tree = this.clone( val, [] );
-	this.els = els;
+	this.tree = this.prepare( val, [ [] ] );
+	this.nodes = {};
+	this.noPathNodes = {};
 };
 
 Tree.prototype = Utils.createNonEnumerable({
-	update: function( type, path, options){
+	reset: function( wrapper, data ){
+		this.tree = this.prepare( data, [ [] ] );
+	},
+
+	update: function( type, wrapper, options){
 
 		if( !this[ type ])
-			throw new Error( 'Unknown update type: ' + type );
+			return Utils.error( 'Unknown update type: ' + type );
 
-		this[ type ]( type, path, options );
+		this[ type ]( wrapper, options );
 
 		if( type == 'update' ){
 			return;
 		}
 	},
 
-	replace: function( type, path, value ) {
-		var target = this.getParent( path, true ),
-			key = path[ path.length - 1 ]
+	replace: function( wrapper, attrs ) {
+
+		var node = this.nodes[ wrapper.__id ],
+			paths = node.__paths,
+			childPaths, prevNode
 		;
 
-		// Remove any reference
-		this.removeReferences( target[key] );
+		this.cleanPaths( paths );
 
-		//Update the tree
-		target[ key ] = this.prepare( value, path );
-	},
-
-	add: function( type, path, values ){
-		var target = this.get( path, true );
-		for( var key in values ){
-			// Remove any reference
-			this.removeReferences( target[ key ] );
-			target[key] = this.prepare( values[key], path.concat( key ) );
+		for( var key in attrs ){
+			prevNode = node[ key ];
+			childPaths = this.addToPaths( paths, key );
+			this.removeReferences( node[ key ], childPaths, true );
+			node[ key ] = this.prepare( attrs[ key ], childPaths );
+			if( prevNode )
+				node[ key ].__listener = prevNode.__listener;
 		}
 	},
 
-	remove: function( type, path, keys ) {
-		var target, i, l;
+	remove: function( wrapper, keys ) {
+		var target = this.nodes[ wrapper.__id ],
+			paths = target.__paths,
+			i, l
+		;
 
-		// If we want to remove some keys from a hash
-		if( keys ) {
-			target = this.get( path, true );
-			for (i = 0, l = keys.length; i<l; i++) {
-				this.removeReferences( target[ keys[i] ] );
-				delete target[ keys[i] ];
-			}
-		}
-		else {
-			// We want to remove the object itself
-			target = this.getParent( path, true );
-			i = path[ path.length - 1];
-			if( Utils.isObject( target ) ){
-				this.removeReferences( target[ i ] );
-				delete target[ i ];
-			}
-			else if( Utils.isArray( target ) ){
-				this.removeReferences( target[ i ] );
-				target.splice( i, 1 );
-			}
+		this.cleanPaths( paths );
+
+		for (i = 0, l = keys.length; i<l; i++) {
+			this.removeReferences( target[ keys[i] ], this.addToPaths( paths, keys[i] ), true );
+			delete target[ keys[i] ];
 		}
 	},
 
-	splice: function( type, path, args ){
-		var target = this.get( path, true ),
+	splice: function( wrapper, args ){
+		var target = this.nodes[ wrapper.__id ],
+			paths = target.__paths,
 			i,l
 		;
 
+		this.cleanPaths( paths );
+
+		// Update the tree
+		var removed = target.splice.apply( target, args );
+
 		// Prepare new elements
 		for( i = 2, l = args.length; i<l; i++ ){
-			args[i] = this.prepare( args[i], path.concat( args[0] + i - 2 ) );
+			args[i] = this.prepare( args[i], this.addToPaths( paths, args[0] + i - 2 ) );
 		}
 
 		// Delete references to the removed elements
-		var removed = target.splice.apply( target, args );
 		for( i = 0, l = removed.length; i<l; i++){
-			this.removeReferences( removed[i] );
+			this.removeReferences( removed[i], this.addToPaths( paths, i) );
 		}
 
 		// Update references for the elements after the inserted ones
 		for( i = args[0] + args.length - 2, l=target.length; i<l; i++ ){
-			this.refreshReferences( target[i], path.concat( i ) );
+			this.refreshReferences( target[i], paths, this.addToPaths( paths, i ) );
 		}
 	},
 
-	append: function( type, path, els ){
-		var target = this.get( path, true );
-		for (var i = 0, l = els.length; i < l; i++) {
-			target.push( this.clone( els[i] ) );
-		}
+	cleanPaths: function( paths ){
+		for(var i=0, l=paths.length; i<l; i++)
+			this.cleanPath( paths[i] );
 	},
 
-	prepend: function( type, path, els ){
-		var target = this.get( path, true ),
-			i, l
-		;
-		for (i = els.length - 1; i >= 0; i--) {
-			target.unshift( this.clone( els[i] ) );
-		}
-		for (i=els.length, l=target.length; i<l; i++) {
-			this.refreshReferences( target[i], path.concat( i ) );
-		}
+	cleanPath: function( path ){
+		this.get( path, true );
 	},
 
 	get: function( path, doCleaning ){
 		var target = this.tree,
-			toClean = [target],
-			i = 0
+			toClean = [ target ],
+			i = 0,
+			node
 		;
 
 		while( i < path.length && target ){
@@ -121,19 +110,19 @@ Tree.prototype = Utils.createNonEnumerable({
 		}
 
 		if( !target )
-			throw new Error( 'Path non existent: ' + path.join('.') );
+			Utils.error( 'Path non existent: ' + path.join('.') );
 
 		if( doCleaning ){
 			for (i = 0; i < toClean.length; i++) {
-				delete toClean[i].__wrapper;
+				node = toClean[i];
+
+				delete this.nodes[ node.__wrapper.__id ];
+				node.__wrapper = false;
+				node.__toUpdate = true;
 			}
 		}
 
 		return target;
-	},
-
-	getParent: function( path, doCleaning ){
-		return this.get( path.slice( 0, path.length - 1), doCleaning );
 	},
 
 	copy: function( tree, path, clbk ) {
@@ -154,75 +143,172 @@ Tree.prototype = Utils.createNonEnumerable({
 		return clbk( tree, path, children );
 	},
 
-	leafProto: {constructor: function(){}},
-
-	clone: function( tree, path ){
-		var proto = this.leafProto,
-			p = path || []
-		;
-
-		return this.copy( tree, p, function( node, path, children ){
-			if( children ) {
-
-				return children;
-			}
-
-			// Create an object that returns the plain value of the leaf
-			return Utils.createNonEnumerable({__leafVal:node}, proto);
-		})
-	},
-
-	prepare: function( tree, path ){
+	prepare: function( tree, paths ){
 		if( Utils.isWrapper( tree ) )
-			return this.prepareWrapper( tree, path );
-		return this.clone( tree );
+			return this.prepareWrapper( tree, paths );
+		return this.clone( tree, paths );
 	},
 
-	prepareWrapper: function( wrapper, path ){
-		var els = this.els;
-		return this.copy( wrapper, path, function( node, path, children ){
-			var childWrappers = node.__children,
-				result, i, l
-			;
-			if( !childWrappers ){
-				result = new Object( node.val() );
-			}
-			else if( Utils.isArray( childWrappers ) ){ // ArrayWrapper
-				result = [];
-				for( i=0,l=childWrappers.length; i<l; i++ )
-					result.push( children[i] );
-			}
-			else { // HashWrapper
-				result = children;
-			}
-
-			result.__wrapper = node;
-			els[ node.__id ] = path;
-
-			return result;
+	addNodeProperties: function( tree, paths, currentPath ) {
+		 Utils.addNE( tree, {
+			__listener: false,
+			__paths: this.addToPaths( paths, currentPath ),
+			__wrapper: false,
+			__toUpdate: false
 		});
 	},
 
-	cloneOk: function( val ){
-		var clone;
-		if( Utils.isObject( val ) ){
-			clone = {};
-			for( var key in val ){
-				clone[ key ] = this.clone( val[ key ] );
-			}
-		}
-		else if ( Utils.isArray( val ) ){
-			clone = [];
-			for (var i = 0, l = val.length; i < l; i++) {
-				clone.push( this.clone( val[i] ) );
-			}
-		}
-		else{
+	clone: function( tree, paths ){
+		var me = this;
 
-			// Rewrap the object to be sure we can add the __wrapper parameter
-			clone = new Object( val );
+		return this.copy( tree, [], function( node, path, children ){
+
+			if( !children )
+				return node;
+
+			me.addNodeProperties( children, paths, path );
+			return children;
+
+		});
+	},
+
+	prepareWrapper: function( wrapper, paths ){
+		var me = this,
+			topNode = this.nodes[ wrapper.__id ]
+		;
+
+		if( topNode ){
+			// We are adding again an existing node, just add the new path to the old node
+			this.copy( topNode, [], function( node, path, children ){
+				// Update paths on non-leaves
+				if( children ) {
+					node.__paths = node.__paths.concat( me.addToPaths( paths, path ) );
+				}
+			});
+
+			return topNode;
 		}
-		return clone;
+		else {
+
+			// try to get the topNode from the path
+			topNode = this.get( paths[0] );
+
+			// Delete paths from the nodes in the updating path,
+			// but don't delete them from the @nodes attribute.
+			if( topNode ){
+				this.removeReferences( topNode, paths );
+			}
+
+			// Try to reuse the wrappers
+			var node = this.restoreWrapper( wrapper, paths, [] );
+
+			// Now clean the tree of nodes without paths
+			if( topNode ){
+				for( var key in me.noPathNodes ){
+					delete me.noPathNodes[ key ];
+					delete me.nodes[ key ];
+				}
+			}
+
+			return node;
+		}
+	},
+
+	restoreWrapper: function( wrapper, paths, path ){
+
+		// Return leaf nodes as they are
+		if( !Utils.isWrapper( wrapper ) )
+			return wrapper;
+
+		var prevNode = this.nodes[ wrapper.__id ];
+		if( prevNode ) {
+
+			// We got a new location for the node
+			prevNode.__paths = prevNode.__paths.concat( this.addToPaths( paths, path ) );
+
+			// remove the node from the list of the nodes without paths,
+			// if it is there
+			delete this.noPathNodes[ prevNode.__wrapper.__id ];
+
+			return prevNode;
+		}
+
+		// No luck, we need to iterate over the children
+		var children, i, l;
+		if( Utils.isObject( wrapper ) ){
+			children = {};
+			for( i in wrapper )
+				children[ i ] = this.restoreWrapper( wrapper[ i ], paths, path.concat( i ) );
+		}
+		else {
+			children = [];
+			for( i=0,l=wrapper.length; i<l; i++ )
+				children.push( this.restoreWrapper( wrapper[ i ], paths, path.concat( i ) ));
+		}
+
+		this.addNodeProperties( children, paths, path );
+		return children;
+	},
+
+	addToPaths: function( paths, key ){
+		var added = [],
+			i,l
+		;
+
+		if( !paths )
+			throw new Error( 'Null' );
+
+		for( i=0,l=paths.length;i<l;i++ ){
+			added.push( paths[i].concat( key ) );
+		}
+
+		return added;
+	},
+
+	isParentPath: function( parent, child ){
+		var isParent = true,
+			i = 0,
+			l = parent.length
+		;
+
+		if( child.length < l )
+			return false;
+
+		while( isParent && i<l ){
+			isParent = parent[i] == child[ i++ ];
+		}
+
+		return isParent;
+	},
+
+	updateNodePaths: function( node, parentPaths, updatedPaths ){
+		var nodePaths = node.__paths,
+			updateValue,i,l,j,p
+		;
+
+		// Iterate over the parentPaths
+		for( i=0,l=parentPaths.length;i<l;i++ ){
+			p = parentPaths[i];
+
+			if( updatedPaths )
+				updateValue = updatedPaths[i][p.length];
+
+			for (j = nodePaths.length - 1; j >= 0; j--) {
+
+				// If the we got the parent of the current path
+				if( this.isParentPath( p, nodePaths[j] ) ){
+
+					// If we want to update, set the updated index of
+					// the parent path in the node path
+					if( updatedPaths )
+						nodePaths[j][p.length] = updateValue;
+
+					// Else we want to delete the path
+					else
+						nodePaths.splice( j, 1 );
+				}
+			}
+		}
 	},
 
 	/**
@@ -230,28 +316,102 @@ Tree.prototype = Utils.createNonEnumerable({
 	 * outdated references to wrappers.
 	 *
 	 * @param  {Branch} tree The part of the tree to remove the references
+	 * @param {Array} paths An array of paths to delete from the tree nodes
+	 * @param {boolean} alsoDelete If the node remains with 0 paths, delete it from @nodes
 	 */
-	removeReferences: function( tree ){
-		var els = this.els;
-		this.copy( tree, [], function( node ){
-			if( !node || !node.__wrapper )
+	removeReferences: function( tree, paths, alsoDelete ){
+		var me = this;
+		this.copy( tree, [], function( node, p, children ){
+
+			if( !children )
 				return;
 
-			delete els[ node.__wrapper.__id ];
+			// Delete the paths
+			me.updateNodePaths( node, paths );
+
+			// If there are no paths delete the node
+			if( !node.__paths.length ){
+				if( alsoDelete )
+					delete me.nodes[ node.__wrapper.__id ];
+				else
+					me.noPathNodes[ node.__wrapper.__id ] = node;
+			}
 		});
 	},
 
 	/**
-	 * Refresh the paths of the subtree
-	 * @param  {Branch} tree The tree part to update
-	 * @param  {Array} path The initial path to start refreshing
+	 * Refresh the paths of the children of an array subtree
+	 * @param  {Branch} tree The array child to update
+	 * @param  {Array} path The paths of the array updated
+	 * @param {Array} updatedPaths The paths with the new key added
 	 */
-	refreshReferences: function( tree, path ){
-		var els = this.els;
-		this.copy( tree, path, function( node, path ){
-			if( node.__wrapper )
-				els[ node.__wrapper.__id ] = path;
+	refreshReferences: function( tree, parentPaths, updatedPaths ){
+		var me = this;
+
+		for (var i = 0; i < updatedPaths.length; i++) {
+			updatedPaths[i]
+		};
+
+		this.copy( tree, [], function( node, path, children ){
+
+			if( !children )
+				return;
+
+
+			// Update the paths
+			me.updateNodePaths( node, parentPaths, updatedPaths );
+
+			var nodePaths = node.__paths,
+				updatedValue,i,l,j,p
+			;
 		});
+	},
+
+	trigger: function( node, eventName, param ){
+		var listener = node.__listener;
+
+		if( listener && !listener.ticking ){
+			listener.ticking = true;
+			Utils.nextTick( function(){
+				listener.ticking = false;
+				listener.trigger( eventName, param );
+			});
+		}
+	},
+
+	createListener: function( wrapper ){
+		var node = this.nodes[ wrapper.__id ],
+			l = node.__listener
+		;
+
+		if( !l ) {
+			l = Object.create(Emitter, {
+				_events: {
+					value: [],
+					writable: true
+				}
+			});
+
+			node.__listener = l;
+		}
+
+		return l;
+	},
+
+	addWrapper: function( node, w ){
+		var prevWrapper = node.__wrapper;
+
+		node.__wrapper = w;
+		this.nodes[ w.__id ] = node;
+
+		if( node.__toUpdate ) {
+			node.__toUpdate = false;
+			this.trigger( node, 'update', w );
+		}
+	},
+
+	getPaths: function( wrapper ){
+		return this.nodes[ wrapper.__id ].__paths.slice(0);
 	}
 });
 //#build

@@ -42,9 +42,7 @@ var cr = ('/*\n%%name%% v%%version%%\n%%homepage%%\n%%license%%: https://github.
 gulp.task( 'build', function(){
 	var src = core( fs.readFileSync('./src/utils.js') ) +
 			core( fs.readFileSync('./src/emitter.js') ) +
-			core( fs.readFileSync('./src/wrapper.js') ) +
-			core( fs.readFileSync('./src/hashWrapper.js') ) +
-			core( fs.readFileSync('./src/arrayWrapper.js') ) +
+			core( fs.readFileSync('./src/mixins.js') ) +
 			core( fs.readFileSync('./src/tree.js') ) +
 			core( fs.readFileSync('./src/' + packageName + '.js'))
 		build = wrap( src )

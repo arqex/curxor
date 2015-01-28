@@ -18,16 +18,16 @@ describe("Curxor hash test", function(){
 	});
 
 	it( "Add a new element to a hash", function(){
-		data.b.add({e:5});
+		data.b.set({e:5});
 
 		var updated = curxor.getData();
 
 		assert.notEqual( updated, data );
-		assert.equal( updated.b.e.val(), 5 );
+		assert.equal( updated.b.e, 5 );
 	});
 
 	it( "Add a new element to a hash doesnt modify other hash elements", function(){
-		data.b.add({e:5});
+		data.b.set({e:5});
 
 		var updated = curxor.getData();
 
@@ -36,20 +36,28 @@ describe("Curxor hash test", function(){
 		assert.equal( updated.b.x, data.b.x );
 	});
 
-	it( "Remove an element", function(){
-		data.a.remove();
-
-		var updated = curxor.getData();
-
-		assert.equal( updated.a, undefined );
-	});
-
 	it( "Remove a hash element", function(){
 		data.remove('a');
 
 		var updated = curxor.getData();
 
 		assert.equal( updated.a, undefined );
+	});
+
+	it( "A removed hash element can't update the data", function(){
+		var b = data.b;
+
+		data.remove('b');
+
+		var updated = curxor.getData();
+
+		assert.equal( updated.b, undefined );
+
+		b.set({ z: 2 });
+
+		var second = curxor.getData();
+
+		assert.equal( second, updated );
 	});
 
 	it( "Remove multiple hash elements", function(){
@@ -79,11 +87,47 @@ describe("Curxor hash test", function(){
 	});
 
 	it( "Add an null key should work", function(){
-		data.add('u', null);
+		data.set({u: null});
 
 		var updated = curxor.getData();
 
-		assert.notEqual( updated.u, null );
-		assert.equal( updated.u.val(), null );
+		assert.equal( updated.u, null );
+	});
+
+	it( "Removing a duplicate node should preserve duplicates", function(){
+		data.c.set( {0: data.b} );
+
+		var updated = curxor.getData();
+		assert.equal( updated.b, updated.c[0] );
+
+		updated.remove( 'b' );
+
+		var second = curxor.getData();
+
+		assert.equal( second.c[0], data.b );
+	});
+
+	it( "Removing all duplicates should remove the node", function(){
+		data.set( {d: data.b} );
+
+		var updated = curxor.getData(),
+			d = updated.d
+		;
+		assert.equal( updated.b, updated.d );
+
+		updated.remove( 'b' );
+
+		var second = curxor.getData();
+		assert.equal( second.d, data.b );
+
+		second.remove( 'd' );
+
+		var third = curxor.getData();
+		assert.equal( third.d, undefined );
+
+		d.set({z: 9});
+
+		var fourth = curxor.getData();
+		assert.equal( third, fourth );
 	});
 });

@@ -16,8 +16,8 @@ Wrapper.prototype = Utils.createNonEnumerable({
 	val: function(){
 		return this.__val;
 	},
-	set: function( value ){
-		this.__notify( 'replace', this, value );
+	set: function( attrs ){
+		this.__notify( 'replace', this, attrs );
 	},
 	remove: function(){
 		this.__notify( 'remove', this );
@@ -30,6 +30,9 @@ Wrapper.prototype = Utils.createNonEnumerable({
 	},
 	getPath: function(){
 		return this.__notify( 'path', this );
+	},
+	getListener: function(){
+		return this.__notify( 'listener', this );
 	},
 	__addNE: function( key, value ){
 		Object.defineProperty( this, key, {value: value});

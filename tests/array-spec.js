@@ -17,18 +17,14 @@ describe("Curxor array test", function(){
 		data = curxor.getData();
 	});
 
-	it( "Size", function(){
-		assert.equal( data.c.size(), 3 );
-	});
-
 	it( "Push an element", function(){
 		data.c.push( 3 );
 
 		var updated = curxor.getData();
 
 		assert.notEqual( updated, data );
-		assert.equal( updated.c[3].val(), 3 );
-		assert.equal( updated.c.size(), 4 );
+		assert.equal( updated.c[3], 3 );
+		assert.equal( updated.c.length, 4 );
 	});
 
 	it( "Append multiple elements", function(){
@@ -36,9 +32,9 @@ describe("Curxor array test", function(){
 
 		var updated = curxor.getData();
 
-		assert.equal( updated.c[3].val(), 3 );
-		assert.equal( updated.c[4].val(), 4 );
-		assert.equal( updated.c.size(), 5 );
+		assert.equal( updated.c[3], 3 );
+		assert.equal( updated.c[4], 4 );
+		assert.equal( updated.c.length, 5 );
 	});
 
 	it( "Push a new element doesnt modify other array elements", function(){
@@ -56,11 +52,9 @@ describe("Curxor array test", function(){
 
 		var updated = curxor.getData();
 
-		console.log( updated );
-
 		assert.equal( element, data.c[2] );
 		assert.equal( updated.c[2], undefined );
-		assert.equal( updated.c.size(), 2 );
+		assert.equal( updated.c.length, 2 );
 	});
 
 	it( "Unshift", function(){
@@ -69,7 +63,7 @@ describe("Curxor array test", function(){
 		var updated = curxor.getData();
 
 		assert.equal( updated.c[0], 0 );
-		assert.equal( updated.c.size(), 4 );
+		assert.equal( updated.c.length, 4 );
 	});
 
 
@@ -84,14 +78,16 @@ describe("Curxor array test", function(){
 	});
 
 	it( "Unshift may update the path of array elements", function(){
-		data.c.unshift( 0 );
+		data.c.set( {3: {arr: [0, {deep: true}, 2]} } );
 
 		var updated = curxor.getData();
 
-		assert.deepEqual( updated.c[1].getPath(), ['c', 1] );
-		assert.deepEqual( updated.c[2].getPath(), ['c', 2] );
-		assert.deepEqual( updated.c[3].getPath(), ['c', 3] );
-		assert.deepEqual( updated.c[3].w.getPath(), ['c', 3, 'w'] );
+		updated.c.unshift( 0 );
+
+		var second = curxor.getData();
+
+		assert.deepEqual( second.c[3].getPaths(), [['c', 3]] );
+		assert.deepEqual( second.c[4].arr[1].getPaths(), [['c', 4, 'arr', 1]] );
 	});
 
 	it( "Prepend multiple objects", function(){
@@ -99,8 +95,8 @@ describe("Curxor array test", function(){
 
 		var updated = curxor.getData();
 
-		assert.equal( updated.c[0].val(), -1 );
-		assert.equal( updated.c[1].val(), -2 );
+		assert.equal( updated.c[0], -1 );
+		assert.equal( updated.c[1], -2 );
 	});
 
 	it( "Shift", function(){
@@ -119,41 +115,10 @@ describe("Curxor array test", function(){
 		var updated = curxor.getData();
 
 		assert.equal( updated.c[0], data.c[0] );
-		assert.equal( updated.c[1].val(), 'new' );
-		assert.equal( updated.c[2].val(), 'second' );
+		assert.equal( updated.c[1], 'new' );
+		assert.equal( updated.c[2], 'second' );
 		assert.equal( updated.c[3], data.c[2] );
-		assert.deepEqual( updated.c[3].w.getPath(), ['c', 3, 'w'] );
-	});
-
-	it( "forEach", function(){
-		var value = [];
-
-		data.c.forEach( function( w ){
-			value.push( w.val() );
-		});
-
-		assert.deepEqual( value, data.c.val() );
-	}),
-
-	it( "map", function(){
-		var wrappers = data.c.map( function( w ){
-			return w;
-		});
-
-		assert.deepEqual( wrappers, data.c.__children );
-	});
-
-	it( "filter", function(){
-		var wrappers = data.c.filter( function( w ){
-			return w == data.c[2];
-		});
-
-		assert.equal( wrappers.length, 1 );
-		assert.deepEqual( wrappers[0], data.c[2] );
-	});
-
-	it( "indexOf", function(){
-		assert.equal( data.c.indexOf( data.c[2] ), 2 );
+		assert.deepEqual( updated.c[3].getPaths(), [['c', 3]] );
 	});
 
 });

@@ -23,6 +23,46 @@ var Utils = {
 		return Object.create( proto || {}, ne );
 	},
 
+	error: function( message ){
+		var err = new Error( message );
+		if( console )
+			return console.error( err );
+		else
+			throw err;
+	},
+
+	clone: function( o ){
+		if( this.isArray( o ) )
+			return o.slice( 0 );
+
+		if( this.isObject( o ) ){
+			var clone = {};
+			for( var key in o )
+				clone[ key ] = o[ key ];
+			return clone;
+		}
+
+		return o;
+	},
+
+	addNE: function( node, attr, value ){
+		var attrs = attr;
+
+		if( typeof value != 'undefined' ){
+			attrs = {};
+			attrs[ attr ] = value;
+		}
+
+		for( var key in attrs ){
+			Object.defineProperty( node, key, {
+				enumerable: false,
+				configurable: true,
+				writable: true,
+				value: attrs[ key ]
+			});
+		}
+	},
+
 	// nextTick - by stagas / public domain
   	nextTick: (function () {
       var queue = [],

@@ -18,33 +18,40 @@ describe("Curxor test", function(){
 	});
 
 	it( "Create a curxor object", function(){
-		assert.equal( data.a.val(), example.a );
-		assert.deepEqual( data.b.val(), example.b );
-		assert.equal( data.b.z.val(), example.b.z );
-		assert.equal( data.b.x[0].val(), example.b.x[0] );
-		assert.deepEqual( data.c.val(), example.c );
-		assert.equal( data.c[0].val(), example.c[0] );
-		assert.equal( data.c[2].w.val(), example.c[2].w );
-		assert.equal( data.d.val(), example.d);
+		assert.equal( data.a, example.a );
+		assert.deepEqual( data.b, example.b );
+		assert.equal( data.b.z, example.b.z );
+		assert.equal( data.b.x[0], example.b.x[0] );
+		assert.deepEqual( data.c, example.c );
+		assert.equal( data.c[0], example.c[0] );
+		assert.equal( data.c[2].w, example.c[2].w );
+		assert.equal( data.d, example.d);
 	});
 
-	it( "Path testing", function(){
-		assert.deepEqual( data.a.getPath(), ['a'] );
-		assert.deepEqual( data.d.getPath(), ['d'] );
-		assert.deepEqual( data.c[2].w.getPath(), ['c', 2, 'w']);
+	it( "Every node has an __id", function(){
+		assert.notEqual( data.b.__id, undefined );
+		assert.notEqual( data.b.x.__id, undefined );
+		assert.notEqual( data.c.__id, undefined );
+		assert.notEqual( data.c[2].__id, undefined );
+	});
+
+	it( "Leaves dont have an __id", function(){
+		assert.equal( data.a.__id, undefined );
+		assert.equal( data.b.z.__id, undefined );
+		assert.equal( data.c[1].__id, undefined );
 	});
 
 	it( "Update a value", function(){
-		data.a.set(2);
+		data.set({a: 2});
 
 		var updated = curxor.getData();
 
+		assert.equal( updated.a, 2 );
 		assert.notEqual( updated, data );
-		assert.equal( updated.a.val(), 2 );
 	});
 
 	it( "Update a value doesnt modify other elements", function(){
-		data.a.set(2);
+		data.set({a: 2});
 
 		var updated = curxor.getData();
 
@@ -53,33 +60,66 @@ describe("Curxor test", function(){
 		assert.equal( updated.d, data.d );
 	});
 
-	it( "Remove an element", function(){
-		data.a.remove();
+	it( "Update an array value", function(){
+		data.c.set({0: 2});
 
 		var updated = curxor.getData();
 
-		assert.equal( updated.a, undefined );
+		assert.equal( updated.c[0], 2 );
+		assert.notEqual( updated, data );
+		assert.notEqual( updated.c, data.c );
 	});
 
-	it( "A removed element should have not a path", function(){
-		data.a.remove();
+	it( "Update an array value doesnt modify other elements", function(){
+		data.c.set({1: 2});
 
 		var updated = curxor.getData();
 
-		assert.equal( data.a.getPath(), undefined );
+		assert.equal( updated.a, data.a );
+		assert.equal( updated.b, data.b );
+		assert.equal( updated.c[0], data.c[0] );
+		assert.equal( updated.c[2], data.c[2] );
 	});
 
-	it( "Children of a removed element should have not a path", function(){
+	it( "Duplicate node", function(){
+		data.set( {d: data.b} );
+		var updated = curxor.getData();
 
-		data.b.remove();
+		assert.equal( data.b, updated.d );
+		assert.notEqual( data, updated );
+	});
+
+	it( "A duplicate node should be updated in every part of the tree", function(){
+		data.set( {d: data.b} );
+		data.b.set( {z: 2} );
 
 		var updated = curxor.getData();
 
-		assert.equal( data.b.getPath(), undefined );
-		assert.equal( data.b.z.getPath(), undefined );
-		assert.equal( data.b.y.getPath(), undefined );
-		assert.equal( data.b.x.getPath(), undefined );
-		assert.equal( data.b.x[0].getPath(), undefined );
-		assert.equal( data.b.x[1].getPath(), undefined );
-	})
+		assert.equal( updated.b, updated.d );
+		assert.equal( updated.d.z, 2 );
+	});
+
+	it( "Restore a previous state", function(){
+		data.set( {e: 9, f: 8} );
+		data.b.set( {y: 10} );
+
+		var updated = curxor.getData();
+
+		assert.equal( updated.b.y, 10 );
+		assert.equal( updated.e, 9 );
+		assert.equal( updated.f, 8 );
+		assert.equal( updated.c, data.c );
+
+
+		curxor.setData( data );
+
+		var second = curxor.getData();
+
+		assert.equal( second.e, undefined );
+		assert.equal( second.c, data.c );
+		assert.equal( second.b.y, data.b.y );
+	});
+
+
+
 });
