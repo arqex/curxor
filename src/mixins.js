@@ -20,54 +20,48 @@ Hash: {
 		}
 
 		if( filtered.length )
-			this.__notify( 'remove', this, filtered );
+			return this.__notify( 'remove', this, filtered );
+		return this;
 	}
 },
 
 List: {
 	push: function( el ){
-		this.append( [el] );
+		return this.append( [el] );
 	},
 
 	append: function( els ){
 		if( els && els.length )
-			this.__notify( 'splice', this, [this.length, 0].concat( els ) );
+			return this.__notify( 'splice', this, [this.length, 0].concat( els ) );
+		return this;
 	},
 
 	pop: function(){
 		if( !this.length )
-			return undefined;
+			return this;
 
-		var lastIndex = this.length -1,
-			el = this[ lastIndex ]
-		;
-
-		this.__notify( 'splice', this, [lastIndex, 1] );
-		return el;
+		return this.__notify( 'splice', this, [this.length -1, 1] );
 	},
 
 	unshift: function( el ){
-		this.prepend( [el] );
+		return this.prepend( [el] );
 	},
 
 	prepend: function( els ){
 		if( els && els.length )
-			this.__notify( 'splice', this, [0, 0].concat( els ) );
+			return this.__notify( 'splice', this, [0, 0].concat( els ) );
+		return this;
 	},
 
 	shift: function(){
 		if( !this.length )
-			return undefined;
+			return this;
 
-		var el = this[0];
-		this.__notify( 'splice', this, [0, 1] );
-		return el;
+		return this.__notify( 'splice', this, [0, 1] );
 	},
 
 	splice: function( index, toRemove, toAdd ){
-		var els = this.slice( index, toRemove );
-		this.__notify( 'splice', this, arguments );
-		return els;
+		return this.__notify( 'splice', this, arguments );
 	}
 }
 

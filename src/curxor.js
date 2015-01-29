@@ -21,7 +21,10 @@ var Curxor = function( initalValue ){
 	var tree = new Tree( initalValue, elements );
 
 	// Updating flag to trigger the event on nextTick
-	var updating = false;
+	var updating = false,
+		toReturn
+	;
+
 	var notify = function notify( eventName, wrapper, options ){
 
 		if( !tree.nodes[ wrapper.__id ] )
@@ -45,6 +48,8 @@ var Curxor = function( initalValue ){
 				me.trigger( 'update' );
 			});
 		}
+
+		return toReturn;
 	};
 
 	var setMixins = function( w, mixin ){
@@ -52,7 +57,7 @@ var Curxor = function( initalValue ){
 			__id: createId(),
 			__notify: notify,
 			set: function( attrs ){
-				this.__notify( 'replace', this, attrs );
+				return this.__notify( 'replace', this, attrs );
 			},
 			getPaths: function( attrs ){
 				return this.__notify( 'path', this );
@@ -67,33 +72,43 @@ var Curxor = function( initalValue ){
 	var createWrapper = function( subtree, path ){
 		var w, key, i, l;
 
-		if( Utils.isObject( subtree ) ){
-			w = {};
-			for( key in subtree )
-				w[ key ] = createWrapper( subtree[key] );
-
-			setMixins( w, Mixins.Hash );
-		}
-		else if( Utils.isArray( subtree ) ){
-			w = [];
-			for( i=0, l=subtree.length; i<l; i++ )
-				w[i] = createWrapper( subtree[i] );
-
-			setMixins( w, Mixins.List );
+		// If the subtree has a wrapper reuse it
+		if( subtree && subtree.__wrapper ) {
+			w = subtree.__wrapper;
 		}
 		else {
-			return subtree;
+			if( Utils.isObject( subtree ) ){
+				w = {};
+				for( key in subtree )
+					w[ key ] = createWrapper( subtree[key] );
+
+				setMixins( w, Mixins.Hash );
+			}
+			else if( Utils.isArray( subtree ) ){
+				w = [];
+				for( i=0, l=subtree.length; i<l; i++ )
+					w[i] = createWrapper( subtree[i] );
+
+				setMixins( w, Mixins.List );
+			}
+			else {
+
+				// Return leaf nodes as they are
+				return subtree;
+			}
+
+			// Add the wrapper to the tree
+			tree.addWrapper( subtree, w );
+
+			// Freeze if possible
+			if( Object.freeze )
+				Object.freeze( w );
 		}
 
-		if( subtree.__wrapper )
-			return subtree.__wrapper;
-
-		// Add the wrapper to the tree
-		tree.addWrapper( subtree, w );
-
-		// Freeze if possible
-		if( Object.freeze )
-			Object.freeze( w );
+		if( subtree.__toReturn ){
+			toReturn = w;
+			subtree.__toReturn = false;
+		}
 
 		return w;
 	};

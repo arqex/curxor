@@ -1,4 +1,4 @@
-/* curxor v0.1.2 (28-1-2015)
+/* curxor v0.2.0 (29-1-2015)
  * https://github.com/arqex/curxor
  * By arqex
  * License: BSD-2-Clause
@@ -294,8 +294,8 @@ var Tree = function( val, els ){
 };
 
 Tree.prototype = Utils.createNonEnumerable({
-	reset: function( wrapper, data ){
-		this.tree = this.prepare( data, [ [] ] );
+	reset: function( root, wrapper ){
+		this.tree = this.prepare( wrapper, [ [] ] );
 	},
 
 	update: function( type, wrapper, options){
@@ -304,10 +304,6 @@ Tree.prototype = Utils.createNonEnumerable({
 			return Utils.error( 'Unknown update type: ' + type );
 
 		this[ type ]( wrapper, options );
-
-		if( type == 'update' ){
-			return;
-		}
 	},
 
 	replace: function( wrapper, attrs ) {
@@ -327,32 +323,36 @@ Tree.prototype = Utils.createNonEnumerable({
 			if( prevNode )
 				node[ key ].__listener = prevNode.__listener;
 		}
+
+		node.__toReturn = true;
 	},
 
 	remove: function( wrapper, keys ) {
-		var target = this.nodes[ wrapper.__id ],
-			paths = target.__paths,
+		var node = this.nodes[ wrapper.__id ],
+			paths = node.__paths,
 			i, l
 		;
 
 		this.cleanPaths( paths );
 
 		for (i = 0, l = keys.length; i<l; i++) {
-			this.removeReferences( target[ keys[i] ], this.addToPaths( paths, keys[i] ), true );
-			delete target[ keys[i] ];
+			this.removeReferences( node[ keys[i] ], this.addToPaths( paths, keys[i] ), true );
+			delete node[ keys[i] ];
 		}
+
+		node.__toReturn = true;
 	},
 
 	splice: function( wrapper, args ){
-		var target = this.nodes[ wrapper.__id ],
-			paths = target.__paths,
+		var node = this.nodes[ wrapper.__id ],
+			paths = node.__paths,
 			i,l
 		;
 
 		this.cleanPaths( paths );
 
 		// Update the tree
-		var removed = target.splice.apply( target, args );
+		var removed = node.splice.apply( node, args );
 
 		// Prepare new elements
 		for( i = 2, l = args.length; i<l; i++ ){
@@ -365,9 +365,11 @@ Tree.prototype = Utils.createNonEnumerable({
 		}
 
 		// Update references for the elements after the inserted ones
-		for( i = args[0] + args.length - 2, l=target.length; i<l; i++ ){
-			this.refreshReferences( target[i], paths, this.addToPaths( paths, i ) );
+		for( i = args[0] + args.length - 2, l=node.length; i<l; i++ ){
+			this.refreshReferences( node[i], paths, this.addToPaths( paths, i ) );
 		}
+
+		node.__toReturn = true;
 	},
 
 	cleanPaths: function( paths ){
@@ -436,7 +438,8 @@ Tree.prototype = Utils.createNonEnumerable({
 			__listener: false,
 			__paths: this.addToPaths( paths, currentPath ),
 			__wrapper: false,
-			__toUpdate: false
+			__toUpdate: false,
+			__toReturn: false
 		});
 	},
 
@@ -711,7 +714,9 @@ var Curxor = function( initalValue ){
 	var tree = new Tree( initalValue, elements );
 
 	// Updating flag to trigger the event on nextTick
-	var updating = false;
+	var updating = false,
+		toReturn
+	;
 	var notify = function notify( eventName, wrapper, options ){
 
 		if( !tree.nodes[ wrapper.__id ] )
@@ -735,6 +740,8 @@ var Curxor = function( initalValue ){
 				me.trigger( 'update' );
 			});
 		}
+
+		return toReturn;
 	};
 
 	var setMixins = function( w, mixin ){
@@ -773,6 +780,11 @@ var Curxor = function( initalValue ){
 		}
 		else {
 			return subtree;
+		}
+
+		if( subtree.__toReturn ){
+			toReturn = subtree;
+			subtree.__toReturn = false;
 		}
 
 		if( subtree.__wrapper )

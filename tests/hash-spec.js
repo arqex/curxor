@@ -18,29 +18,32 @@ describe("Curxor hash test", function(){
 	});
 
 	it( "Add a new element to a hash", function(){
-		data.b.set({e:5});
+		var chained = data.b.set({e:5});
 
 		var updated = curxor.getData();
 
+		assert.equal( chained, updated.b );
 		assert.notEqual( updated, data );
 		assert.equal( updated.b.e, 5 );
 	});
 
 	it( "Add a new element to a hash doesnt modify other hash elements", function(){
-		data.b.set({e:5});
+		var chained = data.b.set({e:5});
 
 		var updated = curxor.getData();
 
+		assert.equal( chained, updated.b );
 		assert.equal( updated.b.z, data.b.z );
 		assert.equal( updated.b.y, data.b.y );
 		assert.equal( updated.b.x, data.b.x );
 	});
 
 	it( "Remove a hash element", function(){
-		data.remove('a');
+		var chained = data.remove('a');
 
 		var updated = curxor.getData();
 
+		assert.equal( chained, updated );
 		assert.equal( updated.a, undefined );
 	});
 
@@ -61,10 +64,11 @@ describe("Curxor hash test", function(){
 	});
 
 	it( "Remove multiple hash elements", function(){
-		data.remove(['a', 'b']);
+		var chained = data.remove(['a', 'b']);
 
 		var updated = curxor.getData();
 
+		assert.equal( chained, updated );
 		assert.equal( updated.a, undefined );
 		assert.equal( updated.b, undefined );
 	});
@@ -87,10 +91,11 @@ describe("Curxor hash test", function(){
 	});
 
 	it( "Add an null key should work", function(){
-		data.set({u: null});
+		var chained = data.set({u: null});
 
 		var updated = curxor.getData();
 
+		assert.equal( chained, updated );
 		assert.equal( updated.u, null );
 	});
 

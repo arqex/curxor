@@ -115,9 +115,20 @@ describe("Curxor test", function(){
 
 		var second = curxor.getData();
 
+		assert.equal( second, data );
 		assert.equal( second.e, undefined );
 		assert.equal( second.c, data.c );
 		assert.equal( second.b.y, data.b.y );
+	});
+
+	it( "Chaining calls", function(){
+		var chained = data.set( {e: 9} )
+			.set( {f: 0} )
+			.set( {a: [2,3,4] } )
+		;
+		var updated = curxor.getData();
+
+		assert.equal( chained, updated );
 	});
 
 
