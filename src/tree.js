@@ -38,7 +38,7 @@ Tree.prototype = Utils.createNonEnumerable({
 			childPaths = this.addToPaths( paths, key );
 			this.removeReferences( node[ key ], childPaths, true );
 			node[ key ] = this.prepare( attrs[ key ], childPaths );
-			if( prevNode )
+			if( prevNode && prevNode.__listener )
 				node[ key ].__listener = prevNode.__listener;
 		}
 
@@ -357,8 +357,8 @@ Tree.prototype = Utils.createNonEnumerable({
 		var me = this;
 
 		for (var i = 0; i < updatedPaths.length; i++) {
-			updatedPaths[i]
-		};
+			updatedPaths[i];
+		}
 
 		this.copy( tree, [], function( node, path, children ){
 

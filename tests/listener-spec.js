@@ -88,7 +88,7 @@ describe("Curxor array test", function(){
 		curxor.setData( data );
 	});
 
-	it( "Unmodified wrappers when replacing the data sould preserve the listeners", function( done ){
+	it( "Unmodified wrappers when replacing the data should preserve the listeners", function( done ){
 		data.b.set( {z:2, y: 3} );
 		data.c.shift();
 

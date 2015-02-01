@@ -1,4 +1,4 @@
-/* curxor v0.2.0 (29-1-2015)
+/* curxor v0.2.0 (1-2-2015)
  * https://github.com/arqex/curxor
  * By arqex
  * License: BSD-2-Clause
@@ -234,54 +234,48 @@ Hash: {
 		}
 
 		if( filtered.length )
-			this.__notify( 'remove', this, filtered );
+			return this.__notify( 'remove', this, filtered );
+		return this;
 	}
 },
 
 List: {
 	push: function( el ){
-		this.append( [el] );
+		return this.append( [el] );
 	},
 
 	append: function( els ){
 		if( els && els.length )
-			this.__notify( 'splice', this, [this.length, 0].concat( els ) );
+			return this.__notify( 'splice', this, [this.length, 0].concat( els ) );
+		return this;
 	},
 
 	pop: function(){
 		if( !this.length )
-			return undefined;
+			return this;
 
-		var lastIndex = this.length -1,
-			el = this[ lastIndex ]
-		;
-
-		this.__notify( 'splice', this, [lastIndex, 1] );
-		return el;
+		return this.__notify( 'splice', this, [this.length -1, 1] );
 	},
 
 	unshift: function( el ){
-		this.prepend( [el] );
+		return this.prepend( [el] );
 	},
 
 	prepend: function( els ){
 		if( els && els.length )
-			this.__notify( 'splice', this, [0, 0].concat( els ) );
+			return this.__notify( 'splice', this, [0, 0].concat( els ) );
+		return this;
 	},
 
 	shift: function(){
 		if( !this.length )
-			return undefined;
+			return this;
 
-		var el = this[0];
-		this.__notify( 'splice', this, [0, 1] );
-		return el;
+		return this.__notify( 'splice', this, [0, 1] );
 	},
 
 	splice: function( index, toRemove, toAdd ){
-		var els = this.slice( index, toRemove );
-		this.__notify( 'splice', this, arguments );
-		return els;
+		return this.__notify( 'splice', this, arguments );
 	}
 }
 
@@ -303,7 +297,7 @@ Tree.prototype = Utils.createNonEnumerable({
 		if( !this[ type ])
 			return Utils.error( 'Unknown update type: ' + type );
 
-		this[ type ]( wrapper, options );
+		return this[ type ]( wrapper, options );
 	},
 
 	replace: function( wrapper, attrs ) {
@@ -320,7 +314,7 @@ Tree.prototype = Utils.createNonEnumerable({
 			childPaths = this.addToPaths( paths, key );
 			this.removeReferences( node[ key ], childPaths, true );
 			node[ key ] = this.prepare( attrs[ key ], childPaths );
-			if( prevNode )
+			if( prevNode && prevNode.__listener )
 				node[ key ].__listener = prevNode.__listener;
 		}
 
@@ -532,6 +526,11 @@ Tree.prototype = Utils.createNonEnumerable({
 		}
 
 		this.addNodeProperties( children, paths, path );
+
+		// Reuse the wrapper
+		children.__wrapper = wrapper;
+		this.nodes[ children.__wrapper.__id ] = children;
+
 		return children;
 	},
 
@@ -634,8 +633,8 @@ Tree.prototype = Utils.createNonEnumerable({
 		var me = this;
 
 		for (var i = 0; i < updatedPaths.length; i++) {
-			updatedPaths[i]
-		};
+			updatedPaths[i];
+		}
 
 		this.copy( tree, [], function( node, path, children ){
 
@@ -717,6 +716,7 @@ var Curxor = function( initalValue ){
 	var updating = false,
 		toReturn
 	;
+
 	var notify = function notify( eventName, wrapper, options ){
 
 		if( !tree.nodes[ wrapper.__id ] )
@@ -737,7 +737,7 @@ var Curxor = function( initalValue ){
 			updating = true;
 			Utils.nextTick( function(){
 				updating = false;
-				me.trigger( 'update' );
+				me.trigger( 'update', tree );
 			});
 		}
 
@@ -748,8 +748,15 @@ var Curxor = function( initalValue ){
 		Utils.addNE( w, {
 			__id: createId(),
 			__notify: notify,
-			set: function( attrs ){
-				this.__notify( 'replace', this, attrs );
+			set: function( attr, value ){
+				var attrs = attr;
+
+				if( typeof value != 'undefined' ){
+					attrs = {};
+					attrs[ attr ] = value;
+				}
+
+				return this.__notify( 'replace', this, attrs );
 			},
 			getPaths: function( attrs ){
 				return this.__notify( 'path', this );
@@ -764,38 +771,43 @@ var Curxor = function( initalValue ){
 	var createWrapper = function( subtree, path ){
 		var w, key, i, l;
 
-		if( Utils.isObject( subtree ) ){
-			w = {};
-			for( key in subtree )
-				w[ key ] = createWrapper( subtree[key] );
-
-			setMixins( w, Mixins.Hash );
-		}
-		else if( Utils.isArray( subtree ) ){
-			w = [];
-			for( i=0, l=subtree.length; i<l; i++ )
-				w[i] = createWrapper( subtree[i] );
-
-			setMixins( w, Mixins.List );
+		// If the subtree has a wrapper reuse it
+		if( subtree && subtree.__wrapper ) {
+			w = subtree.__wrapper;
 		}
 		else {
-			return subtree;
+			if( Utils.isObject( subtree ) ){
+				w = {};
+				for( key in subtree )
+					w[ key ] = createWrapper( subtree[key] );
+
+				setMixins( w, Mixins.Hash );
+			}
+			else if( Utils.isArray( subtree ) ){
+				w = [];
+				for( i=0, l=subtree.length; i<l; i++ )
+					w[i] = createWrapper( subtree[i] );
+
+				setMixins( w, Mixins.List );
+			}
+			else {
+
+				// Return leaf nodes as they are
+				return subtree;
+			}
+
+			// Add the wrapper to the tree
+			tree.addWrapper( subtree, w );
+
+			// Freeze if possible
+			if( Object.freeze )
+				Object.freeze( w );
 		}
 
 		if( subtree.__toReturn ){
-			toReturn = subtree;
+			toReturn = w;
 			subtree.__toReturn = false;
 		}
-
-		if( subtree.__wrapper )
-			return subtree.__wrapper;
-
-		// Add the wrapper to the tree
-		tree.addWrapper( subtree, w );
-
-		// Freeze if possible
-		if( Object.freeze )
-			Object.freeze( w );
 
 		return w;
 	};

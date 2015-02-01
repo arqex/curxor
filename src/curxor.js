@@ -45,7 +45,7 @@ var Curxor = function( initalValue ){
 			updating = true;
 			Utils.nextTick( function(){
 				updating = false;
-				me.trigger( 'update' );
+				me.trigger( 'update', tree );
 			});
 		}
 
@@ -56,7 +56,14 @@ var Curxor = function( initalValue ){
 		Utils.addNE( w, {
 			__id: createId(),
 			__notify: notify,
-			set: function( attrs ){
+			set: function( attr, value ){
+				var attrs = attr;
+
+				if( typeof value != 'undefined' ){
+					attrs = {};
+					attrs[ attr ] = value;
+				}
+
 				return this.__notify( 'replace', this, attrs );
 			},
 			getPaths: function( attrs ){
