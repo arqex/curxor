@@ -110,7 +110,6 @@ describe("Curxor test", function(){
 		assert.equal( updated.f, 8 );
 		assert.equal( updated.c, data.c );
 
-
 		curxor.setData( data );
 
 		var second = curxor.getData();

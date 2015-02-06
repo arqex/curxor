@@ -82,20 +82,6 @@ describe("Curxor array test", function(){
 		assert.equal( updated.c[3], data.c[2] );
 	});
 
-	it( "Unshift may update the path of array elements", function(){
-		var chained = data.c.set( {3: {arr: [0, {deep: true}, 2]} } );
-
-		var updated = curxor.getData();
-
-		updated.c.unshift( 0 );
-
-		var second = curxor.getData();
-
-		assert.equal( chained, updated.c );
-		assert.deepEqual( second.c[3].getPaths(), [['c', 3]] );
-		assert.deepEqual( second.c[4].arr[1].getPaths(), [['c', 4, 'arr', 1]] );
-	});
-
 	it( "Prepend multiple objects", function(){
 		var chained = data.c.prepend( [-1, -2] );
 
@@ -126,7 +112,6 @@ describe("Curxor array test", function(){
 		assert.equal( updated.c[1], 'new' );
 		assert.equal( updated.c[2], 'second' );
 		assert.equal( updated.c[3], data.c[2] );
-		assert.deepEqual( updated.c[3].getPaths(), [['c', 3]] );
 	});
 
 });

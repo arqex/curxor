@@ -95,9 +95,9 @@ store.getData() === data; // true
 
 * If you have a store with deep nested data and you need to update some value from a child component that reflect that data, you need to dispatch an action and from the top of the store look for the bit of data again to update it. That may involve a lot of extra code to propagate the change and it is more painful when you think that the component knew already what data to update.
 
-In the other hand, that the data changes always flow in the same direction is what make Flux architecure so easy to reason about. If we let every component to update the data independently we are building a mess again.
+In the other hand, data changes always flowing in the same direction is what make Flux architecure so easy to reason about. If we let every component to update the data independently we are building a mess again.
 
-So *Curxor*, instead of letting the child component to update the data directly, it gives to the component the tools to require the change. The updates are always made by the root of the store and the data can keep flowing just in one direction.
+So *Curxor*, instead of letting the child component to update the data directly, gives to the component the tools to require the change. The updates are always made by the root of the store and the data can keep flowing just in one direction.
 
 Imagine that we have the following tree structure as our app store: ![Initial tree](img/initialTree.png)
 

@@ -1,4 +1,4 @@
-/* curxor v0.2.0 (1-2-2015)
+/* curxor v0.3.0 (6-2-2015)
  * https://github.com/arqex/curxor
  * By arqex
  * License: BSD-2-Clause
@@ -281,10 +281,10 @@ List: {
 
 };
 
-var Tree = function( val, els ){
-	this.tree = this.prepare( val, [ [] ] );
+var Tree = function( val, notify ){
 	this.nodes = {};
-	this.noPathNodes = {};
+	this.notify = notify;
+	this.tree = this.prepare( val );
 };
 
 Tree.prototype = Utils.createNonEnumerable({
@@ -304,75 +304,125 @@ Tree.prototype = Utils.createNonEnumerable({
 
 		var node = this.nodes[ wrapper.__id ],
 			paths = node.__paths,
-			childPaths, prevNode
+			childPaths, prevNode, newNode, prevWrapper
 		;
-
-		this.cleanPaths( paths );
 
 		for( var key in attrs ){
 			prevNode = node[ key ];
-			childPaths = this.addToPaths( paths, key );
-			this.removeReferences( node[ key ], childPaths, true );
-			node[ key ] = this.prepare( attrs[ key ], childPaths );
-			if( prevNode && prevNode.__listener )
-				node[ key ].__listener = prevNode.__listener;
+
+			// Create a new wrapper
+			node[ key ] = this.prepare( attrs[key] );
+
+			// Remove references to old nodes & wrappers
+			if( !this.isLeaf( prevNode ) ) {
+				this.unRelate( prevNode, node );
+				node[key].__listener = prevNode.__listener;
+			}
 		}
 
-		node.__toReturn = true;
+		this.updateNodePath( node );
+
+		return node.__wrapper;
 	},
 
 	remove: function( wrapper, keys ) {
 		var node = this.nodes[ wrapper.__id ],
-			paths = node.__paths,
 			i, l
 		;
 
-		this.cleanPaths( paths );
-
 		for (i = 0, l = keys.length; i<l; i++) {
-			this.removeReferences( node[ keys[i] ], this.addToPaths( paths, keys[i] ), true );
+			this.unRelate( node[ keys[i] ], node );
 			delete node[ keys[i] ];
 		}
 
-		node.__toReturn = true;
+		this.updateNodePath( node );
+
+		return node.__wrapper;
 	},
 
 	splice: function( wrapper, args ){
 		var node = this.nodes[ wrapper.__id ],
-			paths = node.__paths,
 			i,l
 		;
-
-		this.cleanPaths( paths );
 
 		// Update the tree
 		var removed = node.splice.apply( node, args );
 
 		// Prepare new elements
 		for( i = 2, l = args.length; i<l; i++ ){
-			args[i] = this.prepare( args[i], this.addToPaths( paths, args[0] + i - 2 ) );
+			args[i] = this.prepare( args[i] );
 		}
 
 		// Delete references to the removed elements
 		for( i = 0, l = removed.length; i<l; i++){
-			this.removeReferences( removed[i], this.addToPaths( paths, i) );
+			this.unRelate( removed[i], node );
 		}
 
-		// Update references for the elements after the inserted ones
-		for( i = args[0] + args.length - 2, l=node.length; i<l; i++ ){
-			this.refreshReferences( node[i], paths, this.addToPaths( paths, i ) );
+		this.updateNodePath( node );
+
+		return node.__wrapper;
+	},
+
+	unRelate: function( node, parent ){
+		if( parent && node && node.__parents ){
+			var index = node.__parents.indexOf( parent );
+			if( index != -1 )
+				node.__parents.splice( index, 1 );
+
+			if( !node.__parents.length )
+				delete this.nodes[ node.__wrapper.__id ];
 		}
 
-		node.__toReturn = true;
+		if( Utils.isObject( node ) ){
+			for( var key in node )
+				this.unRelate( node[ key ], node );
+		}
+		else if( Utils.isArray( node ) ){
+			for (var i = 0; i < node.length; i++) {
+				this.unRelate( node[i], node );
+			}
+		}
 	},
 
-	cleanPaths: function( paths ){
-		for(var i=0, l=paths.length; i<l; i++)
-			this.cleanPath( paths[i] );
+	updateNodePath: function( node ){
+		if( !node )
+			return;
+
+		var w, i, l, child;
+
+		if( Utils.isObject( node ) ){
+			w = {};
+			for( var key in node ){
+				child = node[ key ];
+				w[ key ] = child && child.__wrapper || child;
+			}
+			this.setMixins( w, Mixins.Hash );
+		}
+		else {
+			w = [];
+			for (i = 0, l = node.length; i < l; i++) {
+				child = node[ i ];
+				w.push( child && child.__wrapper || child );
+			}
+			this.setMixins( w, Mixins.List );
+		}
+
+		if( Object.freeze )
+			Object.freeze( w );
+
+		delete this.nodes[ node.__wrapper.__id ];
+		node.__wrapper = w;
+		this.nodes[ w.__id ] = node;
+
+		this.trigger( node, 'update', w );
+
+		for (i = 0; i < node.__parents.length; i++) {
+			this.updateNodePath( node.__parents[i] );
+		}
 	},
 
-	cleanPath: function( path ){
-		this.get( path, true );
+	isLeaf: function( node ){
+		return !node || !node.__wrapper;
 	},
 
 	get: function( path, doCleaning ){
@@ -403,252 +453,103 @@ Tree.prototype = Utils.createNonEnumerable({
 		return target;
 	},
 
-	copy: function( tree, path, clbk ) {
-		var children;
-		if( Utils.isObject( tree ) ){
-			children = {};
-			for( var key in tree ){
-				children[ key ] = this.copy( tree[ key ], path.concat( key ), clbk );
+	prepare: function( tree ){
+		if( Utils.isWrapper( tree ) ){
+			var topNode = this.nodes[ tree.__id ];
+
+			// If it is an exisiting node, return it!
+			if( topNode ){
+				console.log( 'copy');
+				return topNode;
 			}
 		}
-		else if ( Utils.isArray( tree ) ){
-			children = [];
+
+		// If it is not a known node, wrap it
+		return this.wrap( tree );
+	},
+
+	wrap: function( tree ){
+		var type = Utils.isObject( tree ) ? 0 : ( Utils.isArray( tree ) ? 1 : 2 ),
+			isWrapper = Utils.isWrapper( tree ),
+			node, child, wrapper
+		;
+
+		// Return the leaves as they are
+		if( type === 2 )
+			return tree;
+
+		node = this.addNodeProperties( type ? [] : {} );
+		wrapper = isWrapper ? tree : ( type ? [] : {} );
+
+		if( type ){
 			for (var i = 0, l = tree.length; i < l; i++) {
-				children.push( this.copy( tree[i], path.concat( i ), clbk ) );
+				this.wrapChild( node, tree[i], i, wrapper );
+			}
+		}
+		else {
+			for( var key in tree ){
+				this.wrapChild( node, tree[key], key, wrapper );
 			}
 		}
 
-		return clbk( tree, path, children );
+		if(!isWrapper)
+			this.setMixins( wrapper, type ? Mixins.List : Mixins.Hash );
+
+		if( Object.freeze )
+			Object.freeze( wrapper );
+
+		node.__wrapper = wrapper;
+		this.nodes[ wrapper.__id ] = node;
+
+		return node;
 	},
 
-	prepare: function( tree, paths ){
-		if( Utils.isWrapper( tree ) )
-			return this.prepareWrapper( tree, paths );
-		return this.clone( tree, paths );
+	wrapChild: function( node, treeNode, key, w ){
+		var child = this.prepare( treeNode );
+		node[ key ] = child;
+
+		// If w it is not a wrapper, add the children
+		if( !Utils.isWrapper( w ) )
+			w[ key ] = child && child.__wrapper ? child.__wrapper : child;
+
+		if( child && child.__parents )
+			child.__parents.push( node );
 	},
 
-	addNodeProperties: function( tree, paths, currentPath ) {
+	setMixins: function( w, mixin ){
+		Utils.addNE( w, {
+			__id: createId(),
+			__notify: this.notify,
+			set: function( attr, value ){
+				var attrs = attr;
+
+				if( typeof value != 'undefined' ){
+					attrs = {};
+					attrs[ attr ] = value;
+				}
+
+				return this.__notify( 'replace', this, attrs );
+			},
+			getPaths: function( attrs ){
+				return this.__notify( 'path', this );
+			},
+			getListener: function(){
+				return this.__notify( 'listener', this );
+			}
+		});
+		Utils.addNE( w, mixin );
+	},
+
+	addNodeProperties: function( tree, currentPath ) {
 		 Utils.addNE( tree, {
 			__listener: false,
-			__paths: this.addToPaths( paths, currentPath ),
+			__parents: [],
 			__wrapper: false,
 			__toUpdate: false,
 			__toReturn: false
 		});
-	},
 
-	clone: function( tree, paths ){
-		var me = this;
-
-		return this.copy( tree, [], function( node, path, children ){
-
-			if( !children )
-				return node;
-
-			me.addNodeProperties( children, paths, path );
-			return children;
-
-		});
-	},
-
-	prepareWrapper: function( wrapper, paths ){
-		var me = this,
-			topNode = this.nodes[ wrapper.__id ]
-		;
-
-		if( topNode ){
-			// We are adding again an existing node, just add the new path to the old node
-			this.copy( topNode, [], function( node, path, children ){
-				// Update paths on non-leaves
-				if( children ) {
-					node.__paths = node.__paths.concat( me.addToPaths( paths, path ) );
-				}
-			});
-
-			return topNode;
-		}
-		else {
-
-			// try to get the topNode from the path
-			topNode = this.get( paths[0] );
-
-			// Delete paths from the nodes in the updating path,
-			// but don't delete them from the @nodes attribute.
-			if( topNode ){
-				this.removeReferences( topNode, paths );
-			}
-
-			// Try to reuse the wrappers
-			var node = this.restoreWrapper( wrapper, paths, [] );
-
-			// Now clean the tree of nodes without paths
-			if( topNode ){
-				for( var key in me.noPathNodes ){
-					delete me.noPathNodes[ key ];
-					delete me.nodes[ key ];
-				}
-			}
-
-			return node;
-		}
-	},
-
-	restoreWrapper: function( wrapper, paths, path ){
-
-		// Return leaf nodes as they are
-		if( !Utils.isWrapper( wrapper ) )
-			return wrapper;
-
-		var prevNode = this.nodes[ wrapper.__id ];
-		if( prevNode ) {
-
-			// We got a new location for the node
-			prevNode.__paths = prevNode.__paths.concat( this.addToPaths( paths, path ) );
-
-			// remove the node from the list of the nodes without paths,
-			// if it is there
-			delete this.noPathNodes[ prevNode.__wrapper.__id ];
-
-			return prevNode;
-		}
-
-		// No luck, we need to iterate over the children
-		var children, i, l;
-		if( Utils.isObject( wrapper ) ){
-			children = {};
-			for( i in wrapper )
-				children[ i ] = this.restoreWrapper( wrapper[ i ], paths, path.concat( i ) );
-		}
-		else {
-			children = [];
-			for( i=0,l=wrapper.length; i<l; i++ )
-				children.push( this.restoreWrapper( wrapper[ i ], paths, path.concat( i ) ));
-		}
-
-		this.addNodeProperties( children, paths, path );
-
-		// Reuse the wrapper
-		children.__wrapper = wrapper;
-		this.nodes[ children.__wrapper.__id ] = children;
-
-		return children;
-	},
-
-	addToPaths: function( paths, key ){
-		var added = [],
-			i,l
-		;
-
-		if( !paths )
-			throw new Error( 'Null' );
-
-		for( i=0,l=paths.length;i<l;i++ ){
-			added.push( paths[i].concat( key ) );
-		}
-
-		return added;
-	},
-
-	isParentPath: function( parent, child ){
-		var isParent = true,
-			i = 0,
-			l = parent.length
-		;
-
-		if( child.length < l )
-			return false;
-
-		while( isParent && i<l ){
-			isParent = parent[i] == child[ i++ ];
-		}
-
-		return isParent;
-	},
-
-	updateNodePaths: function( node, parentPaths, updatedPaths ){
-		var nodePaths = node.__paths,
-			updateValue,i,l,j,p
-		;
-
-		// Iterate over the parentPaths
-		for( i=0,l=parentPaths.length;i<l;i++ ){
-			p = parentPaths[i];
-
-			if( updatedPaths )
-				updateValue = updatedPaths[i][p.length];
-
-			for (j = nodePaths.length - 1; j >= 0; j--) {
-
-				// If the we got the parent of the current path
-				if( this.isParentPath( p, nodePaths[j] ) ){
-
-					// If we want to update, set the updated index of
-					// the parent path in the node path
-					if( updatedPaths )
-						nodePaths[j][p.length] = updateValue;
-
-					// Else we want to delete the path
-					else
-						nodePaths.splice( j, 1 );
-				}
-			}
-		}
-	},
-
-	/**
-	 * Deletes the keys from the element object, to destroy
-	 * outdated references to wrappers.
-	 *
-	 * @param  {Branch} tree The part of the tree to remove the references
-	 * @param {Array} paths An array of paths to delete from the tree nodes
-	 * @param {boolean} alsoDelete If the node remains with 0 paths, delete it from @nodes
-	 */
-	removeReferences: function( tree, paths, alsoDelete ){
-		var me = this;
-		this.copy( tree, [], function( node, p, children ){
-
-			if( !children )
-				return;
-
-			// Delete the paths
-			me.updateNodePaths( node, paths );
-
-			// If there are no paths delete the node
-			if( !node.__paths.length ){
-				if( alsoDelete )
-					delete me.nodes[ node.__wrapper.__id ];
-				else
-					me.noPathNodes[ node.__wrapper.__id ] = node;
-			}
-		});
-	},
-
-	/**
-	 * Refresh the paths of the children of an array subtree
-	 * @param  {Branch} tree The array child to update
-	 * @param  {Array} path The paths of the array updated
-	 * @param {Array} updatedPaths The paths with the new key added
-	 */
-	refreshReferences: function( tree, parentPaths, updatedPaths ){
-		var me = this;
-
-		for (var i = 0; i < updatedPaths.length; i++) {
-			updatedPaths[i];
-		}
-
-		this.copy( tree, [], function( node, path, children ){
-
-			if( !children )
-				return;
-
-
-			// Update the paths
-			me.updateNodePaths( node, parentPaths, updatedPaths );
-
-			var nodePaths = node.__paths,
-				updatedValue,i,l,j,p
-			;
-		});
+		 return tree;
 	},
 
 	trigger: function( node, eventName, param ){
@@ -680,43 +581,23 @@ Tree.prototype = Utils.createNonEnumerable({
 		}
 
 		return l;
-	},
-
-	addWrapper: function( node, w ){
-		var prevWrapper = node.__wrapper;
-
-		node.__wrapper = w;
-		this.nodes[ w.__id ] = node;
-
-		if( node.__toUpdate ) {
-			node.__toUpdate = false;
-			this.trigger( node, 'update', w );
-		}
-	},
-
-	getPaths: function( wrapper ){
-		return this.nodes[ wrapper.__id ].__paths.slice(0);
 	}
+
 });
 
 var Curxor = function( initalValue ){
 	var me = this;
 
-	var wIndex = 1;
 
 	// An index for quick access to the wrappers
 	var elements = {};
-
-	// Tree will store the current structure,
-	// and it is mutable. It is used to create
-	// the wrapper
-	var tree = new Tree( initalValue, elements );
 
 	// Updating flag to trigger the event on nextTick
 	var updating = false,
 		toReturn
 	;
 
+	var tree;
 	var notify = function notify( eventName, wrapper, options ){
 
 		if( !tree.nodes[ wrapper.__id ] )
@@ -729,8 +610,7 @@ var Curxor = function( initalValue ){
 			return tree.createListener( wrapper );
 
 		// Update the tree
-		tree.update( eventName, wrapper, options );
-		me.__wrapper = createWrapper( tree.tree, [] );
+		var toReturn = tree.update( eventName, wrapper, options );
 
 		// Trigger on next tick
 		if( !updating ){
@@ -744,94 +624,29 @@ var Curxor = function( initalValue ){
 		return toReturn;
 	};
 
-	var setMixins = function( w, mixin ){
-		Utils.addNE( w, {
-			__id: createId(),
-			__notify: notify,
-			set: function( attr, value ){
-				var attrs = attr;
+	// Tree will store the current structure,
+	// and it is mutable. It is used to create
+	// the wrapper
+	tree = new Tree( initalValue, notify );
 
-				if( typeof value != 'undefined' ){
-					attrs = {};
-					attrs[ attr ] = value;
-				}
-
-				return this.__notify( 'replace', this, attrs );
-			},
-			getPaths: function( attrs ){
-				return this.__notify( 'path', this );
-			},
-			getListener: function(){
-				return this.__notify( 'listener', this );
-			}
-		});
-		Utils.addNE( w, mixin );
-	};
-
-	var createWrapper = function( subtree, path ){
-		var w, key, i, l;
-
-		// If the subtree has a wrapper reuse it
-		if( subtree && subtree.__wrapper ) {
-			w = subtree.__wrapper;
+	Utils.addNE( this, {
+		getData: function(){
+			//console.log( tree.tree.__wrapper );
+			return tree.tree.__wrapper;
+		},
+		setData: function( wrapper ){
+			notify( 'reset', tree.tree.__wrapper, wrapper );
 		}
-		else {
-			if( Utils.isObject( subtree ) ){
-				w = {};
-				for( key in subtree )
-					w[ key ] = createWrapper( subtree[key] );
-
-				setMixins( w, Mixins.Hash );
-			}
-			else if( Utils.isArray( subtree ) ){
-				w = [];
-				for( i=0, l=subtree.length; i<l; i++ )
-					w[i] = createWrapper( subtree[i] );
-
-				setMixins( w, Mixins.List );
-			}
-			else {
-
-				// Return leaf nodes as they are
-				return subtree;
-			}
-
-			// Add the wrapper to the tree
-			tree.addWrapper( subtree, w );
-
-			// Freeze if possible
-			if( Object.freeze )
-				Object.freeze( w );
-		}
-
-		if( subtree.__toReturn ){
-			toReturn = w;
-			subtree.__toReturn = false;
-		}
-
-		return w;
-	};
-
-	var createId = function() {
-		return 'w' + wIndex++;
-	};
+	})
 
 	// Create the wrapper
-	this.__wrapper = createWrapper( tree.tree, [] );
+	this.__wrapper = tree.tree.__wrapper;
 
 	// The event store
 	this._events = [];
 }
 
-Curxor.prototype = Utils.createNonEnumerable({
-	getData: function(){
-		return this.__wrapper;
-	},
-
-	setData: function( wrapper ){
-		this.__wrapper.__notify( 'reset', this.__wrapper, wrapper );
-	}
-}, Emitter);
+Curxor.prototype = Utils.createNonEnumerable({}, Emitter);
 
 	return Curxor;
 }));
