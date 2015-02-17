@@ -1,5 +1,7 @@
 # Curxor
 
+### ---> Curxor is deprecated. Use [Freezer](https://github.com/arqex/freezer) instead <---
+
 A tree data structure that is always updated from the root, even if the modification is triggered by one of the leaves, making easier to think in a reactive way.
 
 Curxor is made with React.js in mind, to be an utility or a replacement for the flux architecture. 
@@ -13,6 +15,7 @@ What makes Curxor special is:
 * Packaged as UMD module to be loaded everywhere.
 
 ## Example of use
+### ---> Curxor is deprecated. Use [Freezer](https://github.com/arqex/freezer) instead <---
 ```js
 // Browserify/Node style of loading
 var Curxor = require('curxor');
@@ -90,6 +93,7 @@ store.getData() === data; // true
 
 
 ## Why another store?
+### ---> Curxor is deprecated. Use [Freezer](https://github.com/arqex/freezer) instead <---
 
 **Curxor** is inspired by some other tree cursors libraries, specially [Cortex](https://github.com/mquan/cortex) that try to solve an inconvenient of the Flux architecture:
 
@@ -129,6 +133,7 @@ shouldComponentUpdate: function( nextProps ){
 *Curxor* has less features than *Immutable*, but its API is simpler and it is much more lightweight (Minified, Immutable is ~56KB and Curxor ~7KB).
 
 ## API
+### ---> Curxor is deprecated. Use [Freezer](https://github.com/arqex/freezer) instead <---
 
 Create a curxor object using the constructor:
 ```js
@@ -241,6 +246,7 @@ store.getData().arr
 ```
 
 ## Events
+### ---> Curxor is deprecated. Use [Freezer](https://github.com/arqex/freezer) instead <---
 Curxor objects emit `update` events whenever their data changes. It is also possible to listen to `update` events in a intermediate node by creating a listener on it using the method `getListener`.
 
 #### getListener()
